@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wonders of the Deep — Ocean Quiz</title>
+  <style>
+    /* ── Variables ─────────────────────────────────────────── */
+    :root {
+      --ocean-1: #020b18;
+      --ocean-2: #04213f;
+      --ocean-3: #063a5f;
+      --glow:    #00d4ff;
+      --glow2:   #00ffcc;
+      --correct: #00ff99;
+      --wrong:   #ff4466;
+      --card-bg: rgba(255,255,255,0.06);
+      --card-border: rgba(0,212,255,0.2);
+      --text-main: #e0f4ff;
+      --text-dim:  #8dc8e8;
+    }
+
+    /* ── Reset & Base ───────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; }
+    body {
+      min-height: 100vh;
+      background: radial-gradient(ellipse at 50% 0%, var(--ocean-3) 0%, var(--ocean-2) 40%, var(--ocean-1) 100%);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: var(--text-main);
+      overflow-x: hidden;
+    }
+
+    /* ── Bubbles ────────────────────────────────────────────── */
+    #bubbles { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+    .bubble {
+      position: absolute; bottom: -80px; border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, rgba(0,212,255,0.35), rgba(0,212,255,0.05));
+      border: 1px solid rgba(0,212,255,0.15);
+      animation: rise linear infinite;
+    }
+    @keyframes rise {
+      0%   { transform: translateY(0) translateX(0) scale(1);   opacity: 0.7; }
+      50%  { transform: translateY(-50vh) translateX(20px) scale(1.05); opacity: 0.5; }
+      100% { transform: translateY(-110vh) translateX(-10px) scale(0.9); opacity: 0; }
+    }
+
+    /* ── Ambient light rays ─────────────────────────────────── */
+    .rays {
+      position: fixed; top: -20%; left: 50%; width: 200%; height: 80%;
+      transform: translateX(-50%);
+      background: repeating-linear-gradient(
+        90deg,
+        transparent 0%, transparent 8%,
+        rgba(0,180,255,0.03) 9%, rgba(0,180,255,0.03) 11%,
+        transparent 12%
+      );
+      animation: sway 12s ease-in-out infinite alternate;
+      pointer-events: none; z-index: 0;
+    }
+    @keyframes sway { from { transform: translateX(-50%) skewX(0deg); } to { transform: translateX(-50%) skewX(4deg); } }
+
+    /* ── Layout ─────────────────────────────────────────────── */
+    #app { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px 40px; }
+
+    /* ── Screen utility ─────────────────────────────────────── */
+    .screen { display: none; width: 100%; max-width: 680px; animation: fadeUp 0.5s ease both; }
+    .screen.active { display: block; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ══ WELCOME SCREEN ═════════════════════════════════════ */
+    #welcome { text-align: center; }
+    .welcome-logo { font-size: 3.6rem; margin-bottom: 10px; filter: drop-shadow(0 0 18px var(--glow)); }
+    .welcome-title {
+      font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--glow), var(--glow2), #b0e0ff);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      line-height: 1.15; margin-bottom: 12px;
+    }
+    .welcome-subtitle { font-size: 1.05rem; color: var(--text-dim); max-width: 420px; margin: 0 auto 28px; line-height: 1.6; }
+    .credit { font-size: 0.8rem; color: rgba(140,200,232,0.55); margin-top: 8px; }
+
+    .stats-row { display: flex; gap: 16px; justify-content: center; margin-bottom: 32px; flex-wrap: wrap; }
+    .stat-pill {
+      display: flex; align-items: center; gap: 8px; padding: 10px 20px;
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 50px; font-size: 0.9rem; color: var(--text-dim);
+      backdrop-filter: blur(8px);
+    }
+    .stat-pill span:first-child { font-size: 1.1rem; }
+
+    .btn-start {
+      display: inline-block; padding: 16px 52px; font-size: 1.1rem; font-weight: 700;
+      border: none; border-radius: 50px; cursor: pointer; letter-spacing: 0.5px;
+      background: linear-gradient(135deg, #0077b6, #00b4d8, #00d4ff);
+      color: #fff; box-shadow: 0 0 30px rgba(0,180,255,0.4), 0 4px 24px rgba(0,0,0,0.4);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-start:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 0 50px rgba(0,180,255,0.6), 0 8px 32px rgba(0,0,0,0.5); }
+    .btn-start:active { transform: scale(0.98); }
+
+    /* ══ QUIZ SCREEN ════════════════════════════════════════ */
+    /* Progress */
+    .progress-wrap { margin-bottom: 20px; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-dim); margin-bottom: 7px; }
+    .depth-bar-outer { height: 6px; background: rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; }
+    .depth-bar-inner {
+      height: 100%; border-radius: 10px;
+      background: linear-gradient(90deg, var(--glow), var(--glow2));
+      transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+      box-shadow: 0 0 10px var(--glow);
+    }
+
+    /* Question card */
+    .question-card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 20px; overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,212,255,0.06);
+      backdrop-filter: blur(12px); margin-bottom: 18px;
+    }
+    .creature-img-wrap { position: relative; width: 100%; aspect-ratio: 16/9; overflow: hidden; }
+    .creature-img-wrap img {
+      width: 100%; height: 100%; object-fit: cover;
+      transition: transform 0.8s ease;
+      display: block;
+    }
+    .creature-img-wrap:hover img { transform: scale(1.04); }
+    .img-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(to bottom, transparent 50%, rgba(2,11,24,0.9) 100%);
+    }
+    .creature-label {
+      position: absolute; bottom: 14px; left: 18px;
+      font-size: 0.75rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--glow); text-shadow: 0 0 10px var(--glow);
+    }
+    .creature-scientific {
+      position: absolute; bottom: 14px; right: 18px;
+      font-size: 0.72rem; font-style: italic; color: rgba(255,255,255,0.5);
+    }
+
+    .card-body { padding: 22px 24px 24px; }
+    .question-num { font-size: 0.72rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--glow2); margin-bottom: 10px; }
+    .question-text { font-size: clamp(1rem, 2.5vw, 1.2rem); font-weight: 600; line-height: 1.55; color: #fff; }
+
+    /* Answers */
+    .answers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+    @media (max-width: 480px) { .answers-grid { grid-template-columns: 1fr; } }
+
+    .answer-btn {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 14px 16px; font-size: 0.92rem; font-weight: 500; line-height: 1.45;
+      border: 1px solid rgba(0,212,255,0.18); border-radius: 13px;
+      background: rgba(255,255,255,0.04); color: var(--text-main);
+      cursor: pointer; text-align: left; transition: all 0.18s;
+    }
+    .answer-btn:hover:not(:disabled) {
+      background: rgba(0,212,255,0.1); border-color: rgba(0,212,255,0.45);
+      transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,212,255,0.15);
+    }
+    .answer-btn .letter {
+      min-width: 26px; height: 26px; border-radius: 50%;
+      background: rgba(0,212,255,0.12); border: 1px solid rgba(0,212,255,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; color: var(--glow); flex-shrink: 0; margin-top: 1px;
+    }
+
+    .answer-btn.correct {
+      background: rgba(0,255,153,0.12); border-color: var(--correct);
+      box-shadow: 0 0 20px rgba(0,255,153,0.25); animation: pulse-correct 0.6s ease;
+    }
+    .answer-btn.correct .letter { background: rgba(0,255,153,0.3); border-color: var(--correct); color: var(--correct); }
+    .answer-btn.wrong {
+      background: rgba(255,68,102,0.1); border-color: var(--wrong);
+      box-shadow: 0 0 16px rgba(255,68,102,0.2); animation: shake 0.4s ease;
+    }
+    .answer-btn.wrong .letter { background: rgba(255,68,102,0.2); border-color: var(--wrong); color: var(--wrong); }
+    .answer-btn:disabled { cursor: default; }
+
+    @keyframes pulse-correct { 0%,100%{transform:scale(1)} 40%{transform:scale(1.03)} }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+
+    /* Fact reveal */
+    .fact-reveal {
+      display: none; margin-top: 4px; padding: 16px 20px; border-radius: 13px;
+      background: rgba(0,255,204,0.06); border: 1px solid rgba(0,255,204,0.2);
+      font-size: 0.9rem; line-height: 1.65; color: #cef2ff;
+      animation: fadeUp 0.4s ease both;
+    }
+    .fact-reveal.show { display: block; }
+    .fact-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--glow2); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+
+    /* Next button */
+    .btn-next {
+      display: none; width: 100%; padding: 15px; font-size: 1rem; font-weight: 700;
+      border: none; border-radius: 13px; cursor: pointer; letter-spacing: 0.3px;
+      background: linear-gradient(135deg, #005f87, #0090b8);
+      color: #fff; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      transition: all 0.15s;
+    }
+    .btn-next.show { display: block; animation: fadeUp 0.35s 0.15s ease both; opacity:0; animation-fill-mode:forwards; }
+    .btn-next:hover { background: linear-gradient(135deg, #0077aa, #00b4d8); transform: translateY(-1px); }
+
+    /* ══ RESULT SCREEN ══════════════════════════════════════ */
+    #result { text-align: center; }
+    .result-icon { font-size: 4rem; margin-bottom: 16px; filter: drop-shadow(0 0 20px var(--glow)); animation: float 3s ease-in-out infinite; }
+    @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+    .result-title {
+      font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 800; margin-bottom: 12px;
+      background: linear-gradient(135deg, var(--glow), var(--glow2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .score-ring { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 140px; height: 140px; border-radius: 50%; border: 4px solid var(--glow); box-shadow: 0 0 40px rgba(0,212,255,0.35), inset 0 0 20px rgba(0,212,255,0.08); margin: 20px auto; }
+    .score-num { font-size: 2.8rem; font-weight: 800; color: var(--glow); line-height: 1; }
+    .score-denom { font-size: 0.85rem; color: var(--text-dim); margin-top: 4px; }
+    .result-msg { font-size: 1rem; color: var(--text-dim); max-width: 380px; margin: 0 auto 28px; line-height: 1.65; }
+
+    .result-btn-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn-outline {
+      padding: 13px 32px; font-size: 0.95rem; font-weight: 600;
+      border: 1.5px solid var(--glow); border-radius: 50px;
+      background: transparent; color: var(--glow); cursor: pointer; transition: all 0.15s;
+    }
+    .btn-outline:hover { background: rgba(0,212,255,0.12); transform: translateY(-1px); }
+
+    /* ── Misc ────────────────────────────────────────────── */
+    .feedback-bar { font-size: 0.82rem; color: var(--text-dim); text-align: center; margin-bottom: 10px; min-height: 20px; }
+    .feedback-bar.correct-fb { color: var(--correct); }
+    .feedback-bar.wrong-fb   { color: var(--wrong); }
+  </style>
+</head>
+<body>
+
+<!-- Ambient ocean effects -->
+<div id="bubbles"></div>
+<div class="rays"></div>
+
+<div id="app">
+
+  <!-- ══ WELCOME ══ -->
+  <section id="welcome" class="screen active">
+    <div class="welcome-logo">🌊</div>
+    <h1 class="welcome-title">Wonders of the Deep</h1>
+    <p class="welcome-subtitle">
+      Dive into Monterey Bay's most astonishing creatures.<br>
+      Can you guess nature's wildest secrets?
+    </p>
+    <div class="stats-row">
+      <div class="stat-pill"><span>🔬</span><span>19 Creatures</span></div>
+      <div class="stat-pill"><span>❓</span><span>19 Questions</span></div>
+      <div class="stat-pill"><span>🐠</span><span>Real Aquarium Photos</span></div>
+    </div>
+    <button class="btn-start" onclick="startQuiz()">Begin Your Dive ↓</button>
+    <p class="credit">Photos by Senthil Kumaran · Monterey Bay Aquarium</p>
+  </section>
+
+  <!-- ══ QUIZ ══ -->
+  <section id="quiz" class="screen">
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span id="q-counter">Question 1 of 19</span>
+        <span id="depth-label">🤿 Surface</span>
+      </div>
+      <div class="depth-bar-outer"><div class="depth-bar-inner" id="depth-bar" style="width:0%"></div></div>
+    </div>
+
+    <div class="question-card">
+      <div class="creature-img-wrap">
+        <img id="creature-img" src="" alt="Ocean creature" loading="lazy" />
+        <div class="img-overlay"></div>
+        <span class="creature-label" id="creature-label"></span>
+        <span class="creature-scientific" id="creature-sci"></span>
+      </div>
+      <div class="card-body">
+        <div class="question-num" id="question-num"></div>
+        <p class="question-text" id="question-text"></p>
+      </div>
+    </div>
+
+    <div class="answers-grid" id="answers"></div>
+
+    <div class="fact-reveal" id="fact-reveal">
+      <div class="fact-label">🔬 Amazing Fact Unlocked</div>
+      <div id="fact-text"></div>
+    </div>
+
+    <div class="feedback-bar" id="feedback-bar"></div>
+
+    <button class="btn-next" id="btn-next" onclick="nextQuestion()">
+      Next Creature →
+    </button>
+  </section>
+
+  <!-- ══ RESULT ══ -->
+  <section id="result" class="screen">
+    <div class="result-icon" id="result-icon">🏆</div>
+    <h2 class="result-title" id="result-title">Dive Complete!</h2>
+    <div class="score-ring">
+      <div class="score-num" id="score-num">0</div>
+      <div class="score-denom" id="score-denom">out of 19</div>
+    </div>
+    <p class="result-msg" id="result-msg"></p>
+    <div class="result-btn-row">
+      <button class="btn-start" onclick="restartQuiz()">🔄 Dive Again</button>
+      <button class="btn-outline" onclick="showWelcome()">🏠 Home</button>
+    </div>
+    <p class="credit" style="margin-top:24px;">Photos by Senthil Kumaran · Monterey Bay Aquarium</p>
+  </section>
+
+</div>
+
+<script>
+// ── Quiz Data ───────────────────────────────────────────────────
+const QUIZ = [
+  {
+    creature: "Kelp Forest",
+    scientific: "Macrocystis pyrifera",
+    image: "assets/images/img-000.jpg",
+    question: "Giant kelp is one of the fastest-growing organisms on Earth. How fast can it grow?",
+    answers: ["2 feet per day", "2 inches per day", "1 foot per week", "2 feet per week"],
+    correct: 0,
+    fact: "Giant kelp can grow up to 2 feet per day — making it one of the fastest-growing organisms on Earth. These underwater cathedrals support over 800 species along the California coast, in towering columns reaching 150 feet from the seafloor to the sunlit surface. No wonder they're called 'the rainforests of the sea.'"
+  },
+  {
+    creature: "Yelloweye Rockfish",
+    scientific: "Sebastes ruberrimus",
+    image: "assets/images/img-001.jpg",
+    question: "A yelloweye rockfish alive today could have been born before the United States existed. How long can they live?",
+    answers: ["Over 200 years", "About 75 years", "Up to 120 years", "Around 50 years"],
+    correct: 0,
+    fact: "Yelloweye rockfish can live over 200 years — one alive today could have been born before the United States existed. Their name 'Sebastes' means 'magnificent' in Greek, and deeper-dwelling species appear red because red light doesn't penetrate deep water, making them effectively invisible at depth."
+  },
+  {
+    creature: "Sea Pens",
+    scientific: "Order Pennatulacea",
+    image: "assets/images/img-002.jpg",
+    question: "When disturbed, sea pens put on a spectacular light show. What do they do?",
+    answers: ["Emit bioluminescent waves of green-blue light", "Release a cloud of ink", "Retract rapidly into the sand", "Change color to bright red"],
+    correct: 0,
+    fact: "When disturbed, sea pens emit mesmerizing waves of green-blue bioluminescent light rippling along the feather. Each sea pen is actually thousands of tiny individual polyps working together as a colony. They appear in the fossil record from roughly 570 million years ago — predating the Cambrian explosion."
+  },
+  {
+    creature: "Lookdowns & Pompano",
+    scientific: "Selene vomer",
+    image: "assets/images/img-003.jpg",
+    question: "Lookdown fish have a remarkable survival trick that makes them nearly invisible to predators. What is it?",
+    answers: ["Their silvery skin mirrors surrounding water color", "They can change color like a chameleon", "They swim so fast they can't be tracked", "They use camouflage patterns to match the seafloor"],
+    correct: 0,
+    fact: "The lookdown's silvery skin acts like a biological mirror, reflecting the surrounding water color so they become nearly invisible to predators. Schools maintain precise spacing using their lateral line organ — a pressure-sensing system that detects neighbor movements in milliseconds. Complex coordinated behavior emerges with no central controller."
+  },
+  {
+    creature: "Tube Anemones",
+    scientific: "Order Ceriantharia",
+    image: "assets/images/img-004.jpg",
+    question: "Despite looking like true sea anemones, tube anemones have one irreversible vulnerability. What is it?",
+    answers: ["Remove them from their tube and they die — they can never build a new one", "They instantly dissolve in sunlight", "Their stinging cells are useless outside deep water", "They can only survive in one specific location"],
+    correct: 0,
+    fact: "Tube anemones live inside a flexible tube woven from their own fired stinging cells, mucus, and sand — extending up to a meter deep. Remove them from their tube and they die; they can never build a new one. Despite looking identical to true anemones, they diverged from them hundreds of millions of years ago — a stunning example of convergent evolution."
+  },
+  {
+    creature: "Spiny Brittle Stars",
+    scientific: "Ophiothrix spiculata",
+    image: "assets/images/img-005.jpg",
+    question: "Spiny brittle stars have no brain and no eyes — yet they can 'see.' How?",
+    answers: ["Crystal micro-lenses in their skeleton let them see with their entire body", "They sense vibrations through their spiny arms", "Chemical receptors detect light-sensitive molecules", "They detect the magnetic field of the Earth"],
+    correct: 0,
+    fact: "Crystal structures embedded in brittle star skeletal plates function as micro-lenses, meaning they essentially see with their entire skeleton. They have no brain and no eyes, yet can detect light and respond to visual stimuli. A group of brittle stars is called a 'galaxy' — and they've survived all five major mass extinctions across 480 million years."
+  },
+  {
+    creature: "Jawfish",
+    scientific: "Family Opistognathidae",
+    image: "assets/images/img-006.jpg",
+    question: "Male jawfish are devoted fathers who make a remarkable sacrifice for their eggs. What do they do?",
+    answers: ["They hold the entire clutch in their mouth for weeks, not eating", "They build an elaborate sand nest and stand guard day and night", "They secrete a protective gel that surrounds the eggs", "They carry eggs glued to their back until hatching"],
+    correct: 0,
+    fact: "Male jawfish are devoted mouth brooders. After the female lays eggs, the male scoops up the entire clutch into his mouth and holds them there for days to weeks, gently tumbling the eggs to keep them oxygenated. He doesn't eat the entire incubation period — sacrificing his own nutrition to protect the next generation."
+  },
+  {
+    creature: "Sea Otter",
+    scientific: "Enhydra lutris",
+    image: "assets/images/img-007.jpg",
+    question: "Sea otters have zero blubber, yet survive in near-freezing Pacific waters. What keeps them alive?",
+    answers: ["The densest fur of any animal — ~1 million hair follicles per square inch", "A unique metabolism that generates extreme internal body heat", "A layer of air trapped beneath their skin acts as insulation", "They spend frequent time on land to warm up in sunlight"],
+    correct: 0,
+    fact: "Sea otters possess the densest fur of any animal on Earth — roughly 1 million hair follicles per square inch. Your entire human head has about 100,000 hairs total. With absolutely no blubber, this extraordinary fur is their only insulation. If even a small patch gets soiled from an oil spill, they can die from hypothermia — their survival depends on every square inch staying immaculately clean."
+  },
+  {
+    creature: "Giant Green Anemone",
+    scientific: "Anthopleura xanthogrammica",
+    image: "assets/images/img-008.jpg",
+    question: "The giant green anemone is simultaneously an animal, a predator, AND something else entirely. What is it?",
+    answers: ["A solar-powered organism — it farms energy through symbiotic algae", "A deep-sea bioluminescent creature that glows at night", "A filter feeder that absorbs nutrients from passing currents", "A venomous creature that paralyzes prey with its tentacles"],
+    correct: 0,
+    fact: "The giant green anemone is green because it farms solar energy. Symbiotic algae living in its tissues photosynthesize and feed the anemone sugars — exactly like coral. Anemones kept in the dark lose their green color entirely and turn white as the algae die off. It runs on hybrid energy — solar plus hunting — millions of years before humans invented the concept."
+  },
+  {
+    creature: "Bay Pipefish",
+    scientific: "Syngnathus leptorhynchus",
+    image: "assets/images/img-009.jpg",
+    question: "Like their seahorse cousins, pipefish have a reproductive twist that flips the usual roles. What is it?",
+    answers: ["Males get pregnant — they carry and nourish the eggs in a brood pouch", "Both male and female take turns carrying the eggs", "Females carry eggs externally on their backs", "Neither parent cares for eggs — they scatter them on the seafloor"],
+    correct: 0,
+    fact: "Just like seahorses, male pipefish get pregnant. The female deposits eggs into a brood pouch on the male's belly, where he fertilizes, carries, and nourishes them. Researchers also discovered that male pipefish can selectively abort broods from females they find unattractive — one of the only known examples of post-mating male sexual selection in nature."
+  },
+  {
+    creature: "Snowy Plover",
+    scientific: "Charadrius nivosus",
+    image: "assets/images/img-010.jpg",
+    question: "When a predator approaches a snowy plover nest, the parent performs a remarkable act. What is it?",
+    answers: ["It fakes a broken wing to lure the predator away, then 'heals' and flies off", "It attacks the predator with surprising ferocity to drive it away", "It camouflages itself and the nest using nearby debris", "It calls out an alarm to alert the entire flock to mob the predator"],
+    correct: 0,
+    fact: "Snowy plovers are masters of deliberate deception. When a predator approaches their nest, the parent bird fakes a broken wing — dragging it along the ground, flopping pitifully — to lure the threat away. Once led far enough, the bird miraculously 'heals' and flies away. This requires real-time distance calculation and a convincing performance — all with a brain the size of a peanut."
+  },
+  {
+    creature: "American Avocet",
+    scientific: "Recurvirostra americana",
+    image: "assets/images/img-011.jpg",
+    question: "Avocets feed by 'scything.' The male and female bills evolved differently — what advantage does this give them?",
+    answers: ["Mated pairs avoid competing: males probe deeper sediment, females skim shallower water", "Males catch larger prey while females specialize in catching fish", "Females use their bills for nest-building while males do the fishing", "The difference is purely cosmetic and has no functional purpose"],
+    correct: 0,
+    fact: "Avocets sweep their upward-curving bill side-to-side through shallow water, detecting prey entirely by touch. The bill curves more in females than in males — letting mated pairs avoid competing with each other. The male probes slightly deeper sediment while the female skims shallower water. Same habitat, same meal, zero competition between spouses."
+  },
+  {
+    creature: "Bat Ray",
+    scientific: "Myliobatis californica",
+    image: "assets/images/img-012.jpg",
+    question: "Bat rays hunt prey that is completely buried under sand — invisible to the eye. How do they find it?",
+    answers: ["Electroreception: they sense the faint electrical fields of the prey's muscle contractions", "Infrared heat sensors detect the warmth from a living creature beneath the sand", "Echolocation clicks bounce off buried shells and reveal their location", "Highly sensitive nostrils detect chemical traces seeping through the sediment"],
+    correct: 0,
+    fact: "Bat rays use electroreception — sensing the faint electrical fields generated by a clam's muscle contractions hidden beneath the sand. They can detect targets they literally cannot see. They also flap their broad wings to create powerful water jets that blast sediment away, exposing buried prey. Their crushing plate teeth are powerful enough to crack open clams, oysters, and crabs like walnuts."
+  },
+  {
+    creature: "Steelhead Trout",
+    scientific: "Oncorhynchus mykiss",
+    image: "assets/images/img-013.jpg",
+    question: "Steelhead trout and rainbow trout look like completely different fish. Genetically, what are they?",
+    answers: ["Exactly the same species — the difference is purely a life choice", "Subspecies that diverged about 10,000 years ago", "Males and females of the same species", "Two separate species that interbreed in some rivers"],
+    correct: 0,
+    fact: "Steelhead and rainbow trout are genetically identical — the exact same species. The only difference is a life choice. Some stay in freshwater their whole lives as rainbow trout; others migrate to the ocean, grow massive, then return to spawn as steelhead. Two fish hatched from the same clutch of eggs can make completely opposite choices. Same DNA, radically different lives."
+  },
+  {
+    creature: "Pacific Sardines",
+    scientific: "Sardinops sagax",
+    image: "assets/images/img-014.jpg",
+    question: "The sardine industry that powered Cannery Row collapsed in the 1950s. What actually caused it?",
+    answers: ["Natural 60–70 year boom-bust cycles tied to ocean temperature — overfishing just removed the safety buffer", "Overfishing alone depleted the entire population in just one decade", "A catastrophic disease wiped out the sardine population", "Pollution from the canneries themselves poisoned the local fish population"],
+    correct: 0,
+    fact: "Pacific sardines follow natural 60–70 year boom-bust cycles tied to ocean temperature patterns. Overfishing didn't cause the crash — it just removed the buffer. The marine biology equivalent of leverage in finance: the natural cycle was the market correction, overfishing was the margin call. Cannery Row once processed over 700,000 tons per year before the industry vanished overnight."
+  },
+  {
+    creature: "Jellyfish",
+    scientific: "Chrysaora fuscescens",
+    image: "assets/images/img-015.jpg",
+    question: "Jellyfish have no brain, no heart, no blood — and are older than virtually everything alive. How old are they?",
+    answers: ["500–700 million years — older than fish, dinosaurs, and most insects", "About 200 million years — from the Triassic period", "Around 100 million years — they evolved alongside the dinosaurs", "About 50 million years — they're actually a relatively recent life form"],
+    correct: 0,
+    fact: "Jellyfish have been thriving for 500–700 million years, making them older than every fish, dinosaur, tree, and most insects on Earth. As oceans warm and get overfished, jellyfish populations are exploding worldwide. They've shut down nuclear power plants by clogging cooling intakes, collapsed fisheries, and even capsized fishing boats. Proof that the simplest architecture can be the most resilient."
+  },
+  {
+    creature: "Yellowfin Tuna",
+    scientific: "Thunnus albacares",
+    image: "assets/images/img-016.jpg",
+    question: "Yellowfin tuna are one of the very few warm-blooded fish. How do they stay warm in frigid deep water?",
+    answers: ["Counter-current heat exchange (rete mirabile) — like overclocked CPUs with liquid cooling", "They eat constantly to generate enough metabolic heat to stay warm", "A thick fat layer insulates their body like a wetsuit", "Rapid constant swimming generates enough friction to maintain temperature"],
+    correct: 0,
+    fact: "Yellowfin tuna maintain body temperatures up to 20°C above surrounding water using a counter-current heat exchange system called rete mirabile. This lets their muscles operate at peak performance in frigid deep water. Biology solved the thermal management problem long before Silicon Valley did — they're basically running overclocked CPUs with liquid cooling."
+  },
+  {
+    creature: "Scalloped Hammerhead",
+    scientific: "Sphyrna lewini",
+    image: "assets/images/img-017.jpg",
+    question: "The hammerhead's bizarre wide head is not for looks. What is its real biological purpose?",
+    answers: ["Spreads electroreceptor organs wider to scan the seafloor like a metal detector", "Provides hydrodynamic lift to help the shark maneuver at high speed", "Acts as a battering ram to stun prey before biting", "Stores extra electrochemical energy like a biological battery"],
+    correct: 0,
+    fact: "The hammerhead's wide head spreads electroreceptor organs — the ampullae of Lorenzini — across a wider area, letting it scan the seafloor like a handheld mine sweeper. It can detect a stingray buried completely under sand by sensing its heartbeat's electrical field, as faint as one billionth of a volt. They found a way to increase sensor array width without increasing body size."
+  },
+  {
+    creature: "California Sheephead",
+    scientific: "Semicossyphus pulcher",
+    image: "assets/images/img-018.jpg",
+    question: "California sheephead have one of nature's most dramatic social structures. What is their remarkable trait?",
+    answers: ["Every individual is born female; the dominant female permanently transforms into a male", "They can switch gender back and forth multiple times a year", "Males are born first and can become female if the group needs more egg-producers", "Both males and females can transform into either sex depending on food availability"],
+    correct: 0,
+    fact: "Every single California sheephead is born female. They live as females for years, then the largest, most dominant female in a group permanently transforms into a male — changing color from pink to black-and-red, growing a massive bulging forehead, developing enlarged canine teeth, and becoming fiercely aggressive. If the dominant male dies, the next biggest female begins transitioning within weeks. Nature's built-in auto-scaling leadership election."
+  }
+];
+
+// ── State ───────────────────────────────────────────────────────
+let currentQ = 0;
+let score = 0;
+let answered = false;
+let shuffledOrder = [];
+
+// ── Bubbles ─────────────────────────────────────────────────────
+(function createBubbles() {
+  const container = document.getElementById('bubbles');
+  for (let i = 0; i < 28; i++) {
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    const size = 4 + Math.random() * 22;
+    b.style.cssText = `
+      width: ${size}px; height: ${size}px;
+      left: ${Math.random() * 100}%;
+      animation-duration: ${8 + Math.random() * 16}s;
+      animation-delay: ${-Math.random() * 20}s;
+    `;
+    container.appendChild(b);
+  }
+})();
+
+// ── Depth labels ─────────────────────────────────────────────────
+const DEPTH_LABELS = [
+  "🤿 Surface",  "🌊 10m",    "🌊 20m",    "🌿 30m — Kelp Zone",
+  "🐟 50m",     "🦑 80m",    "🌑 120m",   "🔦 200m — Twilight",
+  "🦐 300m",    "🫧 500m",   "🕳️ 700m",   "🌑 1,000m — Midnight",
+  "❄️ 1,500m",  "🐙 2,000m", "💀 3,000m", "🌋 4,000m — Abyssal",
+  "🧊 5,000m",  "⚫ 7,000m", "🏴 11,000m — Mariana Depth"
+];
+
+// ── Quiz Logic ───────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(id);
+  el.classList.remove('active');
+  void el.offsetWidth; // reflow to restart animation
+  el.classList.add('active');
+}
+
+function startQuiz() {
+  currentQ = 0; score = 0;
+  // shuffle order
+  shuffledOrder = [...Array(QUIZ.length).keys()].sort(() => Math.random() - 0.5);
+  showScreen('quiz');
+  renderQuestion();
+}
+
+function renderQuestion() {
+  answered = false;
+  const q = QUIZ[shuffledOrder[currentQ]];
+  const total = QUIZ.length;
+  const pct = Math.round((currentQ / total) * 100);
+
+  // Progress
+  document.getElementById('q-counter').textContent = `Question ${currentQ + 1} of ${total}`;
+  document.getElementById('depth-bar').style.width = pct + '%';
+  document.getElementById('depth-label').textContent = DEPTH_LABELS[Math.min(currentQ, DEPTH_LABELS.length-1)];
+
+  // Image & labels
+  const img = document.getElementById('creature-img');
+  img.src = q.image;
+  img.alt = q.creature;
+  document.getElementById('creature-label').textContent = q.creature;
+  document.getElementById('creature-sci').textContent = q.scientific;
+
+  // Question
+  document.getElementById('question-num').textContent = `Deep Dive #${currentQ + 1}`;
+  document.getElementById('question-text').textContent = q.question;
+
+  // Answers — shuffle them but remember which is correct
+  const indices = [0,1,2,3];
+  const shuffled = indices.sort(() => Math.random() - 0.5);
+  const correctShuffled = shuffled.indexOf(q.correct);
+  const letters = ['A','B','C','D'];
+  const grid = document.getElementById('answers');
+  grid.innerHTML = '';
+  shuffled.forEach((origIdx, pos) => {
+    const btn = document.createElement('button');
+    btn.className = 'answer-btn';
+    btn.dataset.orig = origIdx;
+    btn.dataset.correct = (origIdx === q.correct) ? '1' : '0';
+    btn.innerHTML = `<span class="letter">${letters[pos]}</span><span>${q.answers[origIdx]}</span>`;
+    btn.addEventListener('click', () => handleAnswer(btn, q));
+    grid.appendChild(btn);
+  });
+
+  // Reset UI
+  const factEl = document.getElementById('fact-reveal');
+  factEl.classList.remove('show');
+  const nextBtn = document.getElementById('btn-next');
+  nextBtn.classList.remove('show');
+  nextBtn.textContent = currentQ < total - 1 ? 'Next Creature →' : 'See My Score 🏆';
+  document.getElementById('feedback-bar').textContent = '';
+  document.getElementById('feedback-bar').className = 'feedback-bar';
+}
+
+function handleAnswer(btn, q) {
+  if (answered) return;
+  answered = true;
+  const isCorrect = btn.dataset.correct === '1';
+
+  // Style all buttons
+  document.querySelectorAll('.answer-btn').forEach(b => {
+    b.disabled = true;
+    if (b.dataset.correct === '1') b.classList.add('correct');
+  });
+  if (!isCorrect) btn.classList.add('wrong');
+
+  // Feedback
+  const fb = document.getElementById('feedback-bar');
+  if (isCorrect) {
+    fb.textContent = '✅ Correct! Here\'s the full fascinating story...';
+    fb.className = 'feedback-bar correct-fb';
+    score++;
+  } else {
+    fb.textContent = '❌ Not quite — but here\'s the mind-blowing truth...';
+    fb.className = 'feedback-bar wrong-fb';
+  }
+
+  // Reveal fact
+  document.getElementById('fact-text').textContent = q.fact;
+  document.getElementById('fact-reveal').classList.add('show');
+  document.getElementById('btn-next').classList.add('show');
+}
+
+function nextQuestion() {
+  currentQ++;
+  if (currentQ >= QUIZ.length) {
+    showResult();
+  } else {
+    showScreen('quiz');
+    renderQuestion();
+  }
+}
+
+const RESULT_TIERS = [
+  { min: 17, icon: '🦈', title: 'Deep Sea Master!',      msg: 'You know the ocean's secrets better than most marine biologists. Extraordinary!' },
+  { min: 14, icon: '🐬', title: 'Ocean Explorer!',       msg: 'You've plunged deep and come back with incredible knowledge. The sea holds no secrets from you.' },
+  { min: 10, icon: '🐠', title: 'Reef Adventurer!',      msg: 'Solid knowledge of the deep — keep diving and you\'ll unlock every mystery!' },
+  { min:  6, icon: '🦀', title: 'Tidal Zone Scout',      msg: 'You're just getting your fins wet. Every dive teaches you something new!' },
+  { min:  0, icon: '🐚', title: 'Just Washed Ashore',    msg: 'The ocean is full of wonders still waiting for you. Dive back in!' },
+];
+
+function showResult() {
+  const tier = RESULT_TIERS.find(t => score >= t.min);
+  document.getElementById('result-icon').textContent  = tier.icon;
+  document.getElementById('result-title').textContent = tier.title;
+  document.getElementById('score-num').textContent    = score;
+  document.getElementById('score-denom').textContent  = `out of ${QUIZ.length}`;
+  document.getElementById('result-msg').textContent   = tier.msg;
+  showScreen('result');
+}
+
+function restartQuiz() { startQuiz(); }
+function showWelcome()  { showScreen('welcome'); }
+</script>
+</body>
+</html>
