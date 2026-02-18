@@ -10,11 +10,7 @@ An interactive underwater quiz app built from Senthil Kumaran's personal photo j
 - Fully responsive — works on mobile & desktop
 - Zero dependencies — single HTML file
 
-## 🚀 Deploy to GitHub Pages
-
-1. Fork or push this folder to a GitHub repository
-2. Go to **Settings → Pages → Source → main branch → /root**
-3. Visit `https://yourusername.github.io/repo-name/`
+Visit `https://orsenthil.github.io/wonders-quiz/`
 
 ## 📁 Structure
 ```
